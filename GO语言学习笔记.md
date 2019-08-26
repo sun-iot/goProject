@@ -347,4 +347,362 @@ func printBookPionter(book *Books){
 **对于切片的定义**
 
 > 1. 可以声明一个未指定大小的数组来定义切片，切片不需要指定长度
+
+```go
+/**
+基于数组创建数组切片
+
+可以看到，所谓切片就是对数据进行切割，取出我们想要的数组片段。
+// 得到所有的数组切片：
+mySlice = myArray[:]
+// 得到所有的数组前 n 个切片：
+mySlice bi= myArray[:n]
+// 得到所有的数组后 m 个切片：
+mySlice = myArray[m:]
+// 得到所有的数组从 n 到 m 个切片：
+mySlice = myArray[n:m]
+特别说明：这里的切片是看数组的个数，而非下标。且是左开右闭区间
+*/
+func slice1() {
+	// 定义一个数组
+	var myArray [10]int = [10]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+
+	// 基于数组创建一个切片
+	var mySlice []int = myArray[2:5]
+
+	var mySlice2 []int = myArray[5:8]
+
+	fmt.Println("Element of myArray :")
+	for _, v := range myArray {
+		fmt.Print(v, " ")
+	}
+
+	// 我们在看看我们的切片
+	fmt.Println("\nElement of Slice : ")
+	for _, v := range mySlice {
+		fmt.Print(v, " ")
+	}
+	fmt.Println()
+	// 切片中，GO内置了几个函数：len() 查看当前切片长度, cap() 查看当前切片容量, append() 对切片进行追加
+	fmt.Println("len(mySlice2):", len(mySlice2))
+	fmt.Println("cap(mySlice2):", cap(mySlice2))
+	// 这里的 ... 不能丢失，在GO的语义中， ... 相当于一个省略号，在append中，第二个参数起的所有的参数都是待附加的元素，因为mySlice2
+	// 中的元素类型为 int ，所以直接传递 mySlice 行不通的，加上省略号相当于把 mySice包含的所有元素打散后传入
+	mySlice2 = append(mySlice2, 1, 2, 3)
+	mySlice2 = append(mySlice2, mySlice...)
+	fmt.Println("\nElement of Slice2 : ")
+	for _, v := range mySlice2 {
+		fmt.Print(v, " ")
+	}
+	fmt.Println("\nElement of Slice1 : ")
+	for _, v := range mySlice {
+		fmt.Print(v, " ")
+	}
+	// 讲mySlice中的元素复制到mySlice2中去，注意：复制的值为最短的切片长度为复制的元素个数，
+	// 即 n = min(len(mySlice2) , len(mySlice))为我们的复制的前 n 个元素
+	copy(mySlice2, mySlice)
+	fmt.Println("\n将mySlice的前 n 个元素复制到 mySlice2中后 ， mySlice2中的数据 : ")
+	for _, v := range mySlice2 {
+		fmt.Print(v, " ")
+	}
+}
+```
+
 > 2. 使用make()函数来创建切片
+
+```go
+/**
+直接创建切片
+通过make方式创建切片可以指定切片大小和容量
+如果没有给切片的各个元素赋值，便会使用默认值
+通过make方式创建切片对应的数组是由make底层维护的，对外不可见，即只能通过slice去访问各个元素
+*/
+func slice2() {
+	var myArray [10]int = [10]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	mySlice1 := make([]int, 5)
+	mySlice1[1] = myArray[0]
+
+	mySlice2 := make([]int, 5, 10)
+	mySlice2[1] = myArray[0]
+
+	for _, v := range mySlice2 {
+		fmt.Print(v, " ")
+	}
+}
+```
+
+# GO语言中的错误处理
+
+## error 接口
+
+在 builtin.go中，我们找到了error的接口定义：
+
+```go
+type error interface {
+	Error() string
+}
+```
+
+看下我们的GO语言的毒错误的处理方式：
+
+```go
+// 先看下函数错误处理模式的定义
+func errorFunc()(i int , err error){
+
+	if err != nil {
+		// 错误处理
+		fmt.Println(err)
+	} else{
+		// 正常处理逻辑
+	}
+	// 为了方便不报错，返回的err统一设为nil
+	return 0 , nil
+}
+```
+
+我们的不同的错误，会对error接口实现有点不同。看个例子：
+
+```go
+// 自定义GO中error类型
+// 自定义一个错误的error类型
+type CustomerDivError struct {
+	a    int
+	b    int
+	Info string
+	Err  error
+}
+
+// 实现Error方法，这里用到指针的方式,这样的话，我们就可以返回一个PathError了
+func (e *CustomerDivError) Error() string {
+	return e.Info + ":" + e.Err.Error()
+}
+
+// 在下面的代码逻辑中，syscall.Stat_t 失败返回err,将err打包给我们的PathError对象
+func Operate(num1 int, num2 int) (result int, err error) {
+	data := CustomerDivError{
+		a:    num1,
+		b:    num2,
+		Info: "",
+		Err:  nil,
+	}
+	if num2 == 0 {
+		// data.Info = "除数不可为0"
+		data.Info = data.Err.Error()
+		return
+	} else {
+		return num1 / num2, nil
+	}
+}
+
+// 在看下调用
+	result , err :=Operate(10 , 0)
+	if err != nil {
+		fmt.Println(err)
+	}else {
+		fmt.Println("num1 / num2 = " , result)
+	}
+```
+
+## defer
+
+> 在我们之前的C的编程中，开发者可以将需要释放的资源变量声明在函数的开头部分，并在函数的末尾同养释放资源。函数需要退出时，就必须使用goto语句跳转到指定位置先完成资源清理工作，而不能调用return语句直接返回。
+>
+> 上述方案是可行的，但是，在后期的代码维护中，依然存在非常大的维护性问题。GO语言使用goto就可以很好的解决这个问题。
+>
+> ```go
+> /**
+> GO语言实现文件的复制
+> Copy函数抛出异常，但是我们的dstFile和srcFile依然可以正常关闭
+> 如果一句话清理不干净，我们也可以在defer后面接一个匿名函数
+>  */
+> func CopyFile(dst , src string) (w int64 , err error){
+> 	srcFile,err := os.Open(src)
+> 	if err != nil {
+> 		return 
+> 	}
+> 	defer srcFile.Close()
+> 	
+> 	dstFile , err := os.Create(dst)
+> 	if err != nil {
+> 		return
+> 	}
+> 	defer dstFile.Close()
+> 
+> 	return io.Copy(dstFile , srcFile)
+> }
+> ```
+
+## panic()和recover()
+
+> GO语言引入的两个内置函数 panic()和recover()以用来报告和处理错误和程序中的错误场景：
+>
+> ```go
+> func panic(interface{})
+> // 注意这两个函数的定义方式
+> func recover() interface{}
+> ```
+>
+> **说明：**
+>
+> 1. 当一个函数执行过程中调用panic()函数，正常的函数执行流程将立即终止，但函数中之前使用defer关键字延迟执行的语句将正常展开执行，之后该函数将返回到调用函数，并导致逐层向上执行panic流程，直至所属的goroutime中的所有执行的函数被终止。
+> 2. recover()函数用于终止错误处理流程。一般情况下，recover()应该在一个使用defer关键字的函数中执行以有效截取错误处理流程。如果没有发生异常的goroutime中明确调用回复过程（使用recover关键字），会导致goroutime所属的进程打印异常信息后直接退出。
+>
+> ```go
+> defer func(){
+>     if r := recover() ; r:=nil{
+>         log.Printf("Runtime error caught:%v" , r )
+>     }
+> }()
+> ```
+
+看一个代码，结束GO语言中的基础的学习。
+
+```go
+package main
+
+import (
+	"bufio"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+	"time"
+)
+var inFile *string = flag.String("i" , "0823/sort/unsorted.txt" , "File contains values for sorting")
+var outFile *string = flag.String("o" , "0823/sort/sorted.txt" , "File to receive sorted values")
+var algorithm *string = flag.String("a" , "bubblesort" , "Sort algorithm")
+
+func main(){
+	flag.Parse()
+
+	if inFile != nil {
+		fmt.Println("inFile" , *inFile , "outFile" , *outFile , "algorithm" , *algorithm)
+	}
+	values, err := readValues(*inFile)
+	if err != nil {
+		fmt.Println(err)
+	}else {
+		t1 := time.Now()
+		switch *algorithm {
+		case "qsort" : quitSort(0 , len(values) - 1  , values...)
+		case "bubblesort" : bubbleSort(values ...)
+		default:
+			fmt.Println("Sorting algorithm" , *algorithm , "is either unknown or unsupported.")
+		}
+		t2 := time.Now()
+		fmt.Println("The sorting process costs" , t2.Sub(t1) , "to complete.")
+		writeValues(values , *outFile)
+
+	}
+}
+/**
+从文件读取数据
+ */
+func readValues(inFile string) (values []int ,err error){
+
+	file , err := os.Open(inFile)
+	if err!=nil {
+		fmt.Println("Failed to open the input file ... " , inFile)
+		return
+	}
+	// 使用了defer关闭文件句柄
+	defer file.Close()
+
+	br := bufio.NewReader(file)
+
+	values = make([]int, 0)
+	for {
+		line , isPrefix , err1 := br.ReadLine()
+		if err1 != nil {
+			if err1 != io.EOF{
+				err = err1
+			}
+			break
+		}
+		if isPrefix {
+			fmt.Println("A too long line , seems unexpected ... ")
+			return
+		}
+		str := string(line)
+		value , err1 := strconv.Atoi(str)
+
+		if err1 != nil {
+			err = err1
+			return
+		}
+		values = append(values , value)
+	}
+	return
+}
+/**
+写入文件
+ */
+func writeValues(values []int , outFile string) error{
+	file , err := os.Create(outFile)
+	if err != nil {
+		fmt.Println("Failed to create the output file ... " , outFile)
+		return err
+	}
+	defer file.Close()
+
+	for _, value := range values{
+		str := strconv.Itoa(value)
+		file.WriteString(str + "\n")
+	}
+	return nil
+}
+/**
+冒泡排序
+*/
+func bubbleSort(values ... int){
+	flag := false
+	for i:=0 ; i < len(values)-1 ; i ++ {
+		flag = true
+		for j:=0 ; j < len(values)-i-1 ; j ++ {
+			if values[j] > values[j+1] {
+				values[j] , values[j+1] = values[j+1] , values[j]
+				flag = false
+			}
+		}
+		if flag == true {
+			break
+		}
+	}
+}
+/**
+快速排序的实现
+*/
+func quitSort(left , right int , values ... int){
+	temp := values[left]
+	p := left
+	i ,j := left , right
+
+	for i<=j {
+		for j >= p && values[j] >= temp {
+			j --
+		}
+		if j>= p {
+			values[p] = values[j]
+			p = j
+		}
+
+		if values[i] <= temp && i <= p {
+			i ++
+		}
+		if i<= p {
+			values[p] = values[i]
+			p = i
+		}
+	}
+
+	values[p] = temp
+	if p - left > 1 {
+		quitSort(left , p-1 ,values ... )
+	}
+	if right -p > 1 {
+		quitSort(p + 1 , right , values ... )
+	}
+}
+```
+
